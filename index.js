@@ -10,22 +10,20 @@ app.listen(port, () => console.log(`Example app listening on port ${port}!`))
 var f2l = new Fido2Lib()
 
 function ab2str(buf) {
-    return String.fromCharCode.apply(null, new Uint16Array(buf))
+    return String.fromCharCode.apply(null, new Uint8Array(buf))
 }
 function str2ab(str) {
-    var buf = new ArrayBuffer(str.length * 2) // 2 bytes for each char
+    var buf = new ArrayBuffer(str.length) // 2 bytes for each char
     var bufView = new Uint8Array(buf)
     for (var i = 0, strLen = str.length; i < strLen; i++) {
         bufView[i] = str.charCodeAt(i)
     }
-    return bufView
+    return buf
 }
 
 let challenge
 function storeUserChallenge(str) {
     challenge = str
-    console.log("stored")
-    console.log(challenge)
 }
 
 app.get("/subscribe", async (req, res) => {
@@ -40,9 +38,6 @@ app.get("/subscribe", async (req, res) => {
 })
 
 function getUserChallenge() {
-    return "꺆뮄粷㆏Ⱌ灃뮿̗□�ᙏ㔅￯앢䢩鲁㾘ⅼ㪂밯迺ꌤ׷�鏁唔禢"
-    console.log("retrieved")
-    console.log(challenge)
     return challenge
 }
 
@@ -64,17 +59,29 @@ app.post("/subscribeChallengeResponse", async (req, res) => {
 
     var attestationExpectations = {
         challenge: str2ab(getUserChallenge()),
-        origin: "https://github.com", // TODO: replace with real URL
+        origin: "https://hard-fish-7.localtunnel.me", // TODO: replace with real URL
         factor: "either",
     }
-    var regResult = await f2l.attestationResult(
-        clientAttestationResponse,
-        attestationExpectations
-    ) // will throw on error
+    try {
+        var regResult = await f2l.attestationResult(
+            clientAttestationResponse,
+            attestationExpectations
+        ) // will throw on error
 
-    const publicKey = regResult.authnrData.get("credentialPublicKeyPem")
-    const counter = regResult.authnrData.get("counter")
+        const publicKey = regResult.authnrData.get("credentialPublicKeyPem")
+        const counter = regResult.authnrData.get("counter")
 
-    recordPublicKey(publicKey)
-    res.send("OK")
+        recordPublicKey(publicKey)
+        res.send("OK")
+    } catch (e) {
+        console.log(e)
+        res.send(e.message)
+    }
+})
+
+app.get("/", function(req, res) {
+    res.sendfile("default.html", { root: __dirname + "/public" })
+})
+app.get("/client.js", function(req, res) {
+    res.sendfile("client.js", { root: __dirname + "/public" })
 })
