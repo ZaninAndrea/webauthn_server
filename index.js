@@ -6,7 +6,6 @@ const app = express()
 app.use(bodyParser.json())
 const port = 3000
 
-app.listen(port, () => console.log(`Example app listening on port ${port}!`))
 var f2l = new Fido2Lib()
 
 function ab2str(buf) {
@@ -45,6 +44,11 @@ let pubKey
 function recordPublicKey(pk) {
     pubKey = pk
 }
+
+let id
+function recordCredId(k) {
+    id = k
+}
 app.post("/subscribeChallengeResponse", async (req, res) => {
     var clientAttestationResponse = req.body
     clientAttestationResponse.rawId = new Int8Array(
@@ -59,7 +63,7 @@ app.post("/subscribeChallengeResponse", async (req, res) => {
 
     var attestationExpectations = {
         challenge: str2ab(getUserChallenge()),
-        origin: "https://hard-fish-7.localtunnel.me", // TODO: replace with real URL
+        origin: "https://perfect-badger-36.localtunnel.me", // TODO: replace with real URL
         factor: "either",
     }
     try {
@@ -69,9 +73,77 @@ app.post("/subscribeChallengeResponse", async (req, res) => {
         ) // will throw on error
 
         const publicKey = regResult.authnrData.get("credentialPublicKeyPem")
+        const credId = regResult.authnrData.get("credId")
         const counter = regResult.authnrData.get("counter")
 
         recordPublicKey(publicKey)
+        recordCredId(ab2str(credId))
+        res.send("OK")
+    } catch (e) {
+        console.log(e)
+        res.send(e.message)
+    }
+})
+
+let signInChallenge
+function storeSignInChallenge(str) {
+    signInChallenge = str
+}
+function getLogInChallenge() {
+    return signInChallenge
+}
+
+function getPublicKey() {
+    return pubKey
+}
+
+function getCredID() {
+    return id
+}
+
+app.get("/signIn", async (req, res) => {
+    var authnOptions = await f2l.assertionOptions()
+
+    authnOptions.challenge = ab2str(authnOptions.challenge)
+    authnOptions.pubKeyCredParams = [
+        { type: "public-key", alg: -7, id: getCredID() },
+        { type: "public-key", alg: -257, id: getCredID() },
+    ]
+    authnOptions.rp = { name: "test" }
+    authnOptions.user = { id: "teee", name: "a", displayName: "a" }
+    storeSignInChallenge(authnOptions.challenge)
+
+    res.send(authnOptions)
+})
+app.post("/signInChallengeResponse", async (req, res) => {
+    var clientAssertionResponse = req.body
+    clientAssertionResponse.rawId = new Int8Array(
+        clientAssertionResponse.rawId
+    ).buffer
+    clientAssertionResponse.response.attestationObject = new Int8Array(
+        clientAssertionResponse.response.attestationObject
+    ).buffer
+    clientAssertionResponse.response.clientDataJSON = new Int8Array(
+        clientAssertionResponse.response.clientDataJSON
+    ).buffer
+    clientAssertionResponse.userHandle = null
+    clientAssertionResponse.userVerification = "discouraged"
+
+    var assertionExpectations = {
+        challenge: str2ab(getLogInChallenge()),
+        origin: "https://perfect-badger-36.localtunnel.me", // TODO: replace with real URL
+        factor: "either",
+        publicKey: getPublicKey(),
+        prevCounter: 0,
+    }
+
+    try {
+        var authnResult = await f2l.assertionResult(
+            clientAssertionResponse,
+            assertionExpectations
+        )
+
+        console.log(authnResult)
         res.send("OK")
     } catch (e) {
         console.log(e)
@@ -85,3 +157,5 @@ app.get("/", function(req, res) {
 app.get("/client.js", function(req, res) {
     res.sendfile("client.js", { root: __dirname + "/public" })
 })
+
+app.listen(port, () => console.log(`Example app listening on port ${port}!`))
