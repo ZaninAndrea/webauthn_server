@@ -12,12 +12,7 @@ function ab2str(buf) {
     return String.fromCharCode.apply(null, new Uint8Array(buf))
 }
 function str2ab(str) {
-    var buf = new ArrayBuffer(str.length) // 2 bytes for each char
-    var bufView = new Uint8Array(buf)
-    for (var i = 0, strLen = str.length; i < strLen; i++) {
-        bufView[i] = str.charCodeAt(i)
-    }
-    return buf
+    return Uint8Array.from(str, c => c.charCodeAt(0))
 }
 
 let challenge
@@ -32,6 +27,12 @@ app.get("/subscribe", async (req, res) => {
     storeUserChallenge(registrationOptions.challenge)
     registrationOptions.rp = { name: "test" }
     registrationOptions.user = { id: "teee", name: "a", displayName: "a" }
+    registrationOptions.pubKeyCredParams = [{ alg: -7, type: "public-key" }]
+    registrationOptions.authenticatorSelection = {
+        authenticatorAttachment: "cross-platform",
+    }
+    registrationOptions.timeout = 60000
+    registrationOptions.attestation = "none"
 
     res.send(registrationOptions)
 })
@@ -63,7 +64,7 @@ app.post("/subscribeChallengeResponse", async (req, res) => {
 
     var attestationExpectations = {
         challenge: str2ab(getUserChallenge()),
-        origin: "https://perfect-badger-36.localtunnel.me", // TODO: replace with real URL
+        origin: "https://webauthn.localtunnel.me", // TODO: replace with real URL
         factor: "either",
     }
     try {
@@ -105,12 +106,13 @@ app.get("/signIn", async (req, res) => {
     var authnOptions = await f2l.assertionOptions()
 
     authnOptions.challenge = ab2str(authnOptions.challenge)
-    authnOptions.pubKeyCredParams = [
+    authnOptions.allowCredentials = [
         { type: "public-key", alg: -7, id: getCredID() },
         { type: "public-key", alg: -257, id: getCredID() },
     ]
     authnOptions.rp = { name: "test" }
     authnOptions.user = { id: "teee", name: "a", displayName: "a" }
+    authnOptions.userVerification = "discouraged"
     storeSignInChallenge(authnOptions.challenge)
 
     res.send(authnOptions)
@@ -120,20 +122,22 @@ app.post("/signInChallengeResponse", async (req, res) => {
     clientAssertionResponse.rawId = new Int8Array(
         clientAssertionResponse.rawId
     ).buffer
-    clientAssertionResponse.response.attestationObject = new Int8Array(
-        clientAssertionResponse.response.attestationObject
-    ).buffer
     clientAssertionResponse.response.clientDataJSON = new Int8Array(
         clientAssertionResponse.response.clientDataJSON
     ).buffer
-    clientAssertionResponse.userHandle = null
-    clientAssertionResponse.userVerification = "discouraged"
+    clientAssertionResponse.response.authenticatorData = new Int8Array(
+        clientAssertionResponse.response.authenticatorData
+    ).buffer
+    clientAssertionResponse.response.signature = new Int8Array(
+        clientAssertionResponse.response.signature
+    ).buffer
 
     var assertionExpectations = {
         challenge: str2ab(getLogInChallenge()),
-        origin: "https://perfect-badger-36.localtunnel.me", // TODO: replace with real URL
+        origin: "https://webauthn.localtunnel.me", // TODO: replace with real URL
         factor: "either",
         publicKey: getPublicKey(),
+        userHandle: null,
         prevCounter: 0,
     }
 
@@ -143,7 +147,6 @@ app.post("/signInChallengeResponse", async (req, res) => {
             assertionExpectations
         )
 
-        console.log(authnResult)
         res.send("OK")
     } catch (e) {
         console.log(e)

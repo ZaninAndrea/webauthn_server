@@ -1,10 +1,5 @@
 function str2ab(str) {
-    var buf = new ArrayBuffer(str.length) // 2 bytes for each char
-    var bufView = new Uint8Array(buf)
-    for (var i = 0, strLen = str.length; i < strLen; i++) {
-        bufView[i] = str.charCodeAt(i)
-    }
-    return bufView
+    return Uint8Array.from(str, c => c.charCodeAt(0))
 }
 
 function ab2str(ab) {
@@ -13,7 +8,7 @@ function ab2str(ab) {
 
 async function registerSecurityKey() {
     const rawGetResponse = await fetch(
-        "https://perfect-badger-36.localtunnel.me/subscribe",
+        "https://webauthn.localtunnel.me/subscribe",
         {
             method: "GET",
             headers: {
@@ -36,7 +31,7 @@ async function registerSecurityKey() {
         payload.response.clientDataJSON = ab2str(res.response.clientDataJSON)
 
         const rawResponse = await fetch(
-            "https://perfect-badger-36.localtunnel.me/subscribeChallengeResponse",
+            "https://webauthn.localtunnel.me/subscribeChallengeResponse",
             {
                 method: "POST",
                 headers: {
@@ -59,7 +54,7 @@ async function registerSecurityKey() {
 
 async function signIn() {
     const rawGetResponse = await fetch(
-        "https://perfect-badger-36.localtunnel.me/signIn",
+        "https://webauthn.localtunnel.me/signIn",
         {
             method: "GET",
             headers: {
@@ -72,7 +67,7 @@ async function signIn() {
 
     response.challenge = str2ab(response.challenge)
     response.user.id = new TextEncoder("utf-8").encode(response.user.id)
-    response.pubKeyCredParams = response.pubKeyCredParams.map(cred => ({
+    response.allowCredentials = response.allowCredentials.map(cred => ({
         ...cred,
         id: str2ab(cred.id),
     }))
@@ -81,13 +76,14 @@ async function signIn() {
         console.log(res)
         let payload = { response: {} }
         payload.rawId = ab2str(res.rawId)
-        payload.response.attestationObject = ab2str(
-            res.response.attestationObject
+        payload.response.authenticatorData = ab2str(
+            res.response.authenticatorData
         )
         payload.response.clientDataJSON = ab2str(res.response.clientDataJSON)
+        payload.response.signature = ab2str(res.response.signature)
 
         const rawResponse = await fetch(
-            "https://perfect-badger-36.localtunnel.me/signInChallengeResponse",
+            "https://webauthn.localtunnel.me/signInChallengeResponse",
             {
                 method: "POST",
                 headers: {
@@ -103,7 +99,7 @@ async function signIn() {
     }
 
     navigator.credentials
-        .create({ publicKey: response })
+        .get({ publicKey: response })
         .then(sendResponse)
         .catch(e => alert(e))
 }
